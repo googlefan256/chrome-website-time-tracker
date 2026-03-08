@@ -1,5 +1,8 @@
 name: Build Extension
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: ["**"]
@@ -34,3 +37,16 @@ jobs:
         with:
           name: chrome-website-time-tracker
           path: chrome-website-time-tracker.zip
+
+      - name: Set prerelease tag
+        if: github.event_name == 'push'
+        run: echo "RELEASE_TAG=$(date -u +'%Y-%m-%d')-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Upload build to prerelease
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          prerelease: true
+          files: chrome-website-time-tracker.zip

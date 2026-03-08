@@ -3,79 +3,124 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>サイト利用ランキング</title>
+    <title>サイト利用統計</title>
     <style>
       body {
         margin: 0;
-        width: 360px;
-        min-height: 420px;
+        width: 420px;
+        min-height: 520px;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background: #0f1220;
         color: #f7f8fc;
       }
       .wrap {
-        padding: 16px;
+        padding: 14px;
       }
       h1 {
-        margin: 0 0 8px;
+        margin: 0 0 12px;
         font-size: 18px;
       }
-      p {
-        margin: 0 0 12px;
-        color: #b6bdd6;
+      .period {
+        background: #1a1f35;
+        border: 1px solid #2b3354;
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 12px;
       }
-      ol {
+      h2 {
+        margin: 0;
+        font-size: 15px;
+      }
+      .period-subtitle {
+        margin: 4px 0 10px;
+        color: #9fb0e8;
+        font-size: 12px;
+      }
+      h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        color: #c8d2f8;
+      }
+      .chart-block {
+        margin-bottom: 12px;
+      }
+      .bar-list,
+      .legend {
+        list-style: none;
         margin: 0;
         padding: 0;
-        list-style: none;
       }
-      li {
-        --site-primary: #8ea0ff;
-        display: grid;
-        grid-template-columns: 28px 1fr auto;
-        gap: 10px;
-        align-items: center;
-        background:
-          radial-gradient(circle at 16px 50%, color-mix(in oklab, var(--site-primary) 45%, transparent), transparent 70%),
-          #1a1f35;
-        border: 1px solid color-mix(in oklab, var(--site-primary) 35%, #2b3354);
-        border-radius: 12px;
-        padding: 10px;
+      .bar-item {
         margin-bottom: 8px;
       }
-      .rank {
-        color: var(--site-primary);
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-      }
-      .site {
-        min-width: 0;
+      .bar-label-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 4px;
+        font-size: 12px;
       }
       .host {
-        min-width: 0;
-        font-size: 14px;
+        max-width: 160px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .time {
-        color: color-mix(in oklab, var(--site-primary) 60%, #fff 40%);
+      .meta {
+        color: #b7c1e8;
         font-variant-numeric: tabular-nums;
-        font-weight: 700;
+      }
+      .bar-track {
+        background: #101426;
+        border-radius: 99px;
+        height: 10px;
+        overflow: hidden;
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: 99px;
+      }
+      .pie {
+        width: 130px;
+        height: 130px;
+        border-radius: 50%;
+        margin: 0 auto 10px;
+        border: 1px solid #2b3354;
+      }
+      .legend li {
+        display: grid;
+        grid-template-columns: 12px 1fr auto;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 6px;
+        font-size: 12px;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+      .legend-host {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .legend-ratio {
+        color: #d2dcff;
+        font-variant-numeric: tabular-nums;
       }
       .empty {
         color: #9aa4cc;
         text-align: center;
-        padding: 24px 12px;
+        padding: 14px 12px;
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <h1>今日のサイト利用ランキング</h1>
-      <p id="date"></p>
-      <ol id="ranking"></ol>
-      <div id="empty" class="empty" hidden>まだ計測データがありません。</div>
+      <h1>サイト利用統計ダッシュボード</h1>
+      <div id="periods"></div>
     </div>
     <script src="popup.js"></script>
   </body>

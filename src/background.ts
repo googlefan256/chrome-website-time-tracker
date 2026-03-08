@@ -23,32 +23,37 @@ type TabState = {
 const tabStates = new Map<number, TabState>();
 const siteLastCountedAt = new Map<string, number>();
 
-chrome.runtime.onMessage.addListener((message: RequestMessage, sender, sendResponse) => {
-  if (!message || typeof message !== "object") {
-    return;
-  }
+chrome.runtime.onMessage.addListener(
+  (message: RequestMessage, sender, sendResponse) => {
+    if (!message || typeof message !== "object") {
+      return;
+    }
 
-  if (message.type === "heartbeat") {
-    void handleHeartbeat(message, sender).then(sendResponse);
-    return true;
-  }
+    if (message.type === "heartbeat") {
+      void handleHeartbeat(message, sender).then(sendResponse);
+      return true;
+    }
 
-  if (message.type === "getSiteUsage") {
-    void getSiteUsage(message.host).then((usage) => {
-      sendResponse({
-        site: normalizeSiteHost(message.host),
-        totalMs: usage
+    if (message.type === "getSiteUsage") {
+      void getSiteUsage(message.host).then((usage) => {
+        sendResponse({
+          site: normalizeSiteHost(message.host),
+          totalMs: usage,
+        });
       });
-    });
-    return true;
-  }
-});
+      return true;
+    }
+  },
+);
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabStates.delete(tabId);
 });
 
-async function handleHeartbeat(message: HeartbeatRequest, sender: chrome.runtime.MessageSender) {
+async function handleHeartbeat(
+  message: HeartbeatRequest,
+  sender: chrome.runtime.MessageSender,
+) {
   const tabId = sender.tab?.id;
   const now = message.now;
   const site = normalizeSiteHost(message.host);
@@ -57,7 +62,7 @@ async function handleHeartbeat(message: HeartbeatRequest, sender: chrome.runtime
     tabStates.set(tabId, {
       site,
       active: message.active,
-      lastSeenAt: now
+      lastSeenAt: now,
     });
   }
 
@@ -65,7 +70,7 @@ async function handleHeartbeat(message: HeartbeatRequest, sender: chrome.runtime
 
   return {
     site,
-    totalMs: await getSiteUsage(site)
+    totalMs: await getSiteUsage(site),
   };
 }
 
@@ -161,7 +166,7 @@ function normalizeSiteHost(host: string) {
     "net.au",
     "org.au",
     "co.kr",
-    "com.br"
+    "com.br",
   ]);
 
   const tail2 = labels.slice(-2).join(".");

@@ -1,5 +1,5 @@
-import { build } from "esbuild";
 import { cpSync, mkdirSync, rmSync } from "node:fs";
+import { build } from "esbuild";
 
 rmSync("dist", { recursive: true, force: true });
 mkdirSync("dist", { recursive: true });
@@ -8,13 +8,13 @@ await build({
   entryPoints: {
     content: "src/content.ts",
     background: "src/background.ts",
-    popup: "src/popup.ts"
+    popup: "src/popup.ts",
   },
   bundle: true,
   minify: true,
   outdir: "dist",
   target: ["chrome109"],
-  format: "esm"
+  format: "esm",
 });
 
 cpSync("src/manifest.json", "dist/manifest.json");

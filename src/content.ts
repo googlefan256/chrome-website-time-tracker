@@ -1,6 +1,6 @@
 const ROOT_ID = "website-time-tracker-root";
 const TICK_MS = 1_000;
-const TITLE = "Tube Timer";
+const TITLE = "Website Timer";
 
 if (location.protocol.startsWith("http")) {
   void boot();
@@ -8,6 +8,7 @@ if (location.protocol.startsWith("http")) {
 
 async function boot() {
   const ui = createWidget();
+  enableGlobalDrag(ui.root);
   const colors = await resolveSiteColors();
   applyColors(ui, colors);
 
@@ -23,7 +24,7 @@ async function boot() {
       type: "heartbeat",
       host: location.hostname,
       active: isActive(),
-      now: Date.now()
+      now: Date.now(),
     });
 
     totalMs = Number(response?.totalMs ?? totalMs);
@@ -34,7 +35,7 @@ async function boot() {
 
   const initial = await chrome.runtime.sendMessage({
     type: "getSiteUsage",
-    host: location.hostname
+    host: location.hostname,
   });
 
   totalMs = Number(initial?.totalMs ?? 0);
@@ -71,7 +72,7 @@ function createWidget() {
   root.id = ROOT_ID;
   root.style.position = "fixed";
   root.style.top = "16px";
-  root.style.right = "16px";
+  root.style.left = "16px";
   root.style.zIndex = "2147483647";
   root.style.pointerEvents = "none";
 
@@ -142,7 +143,64 @@ function createWidget() {
 
   document.documentElement.append(root);
 
-  return { wrap, time, desc };
+  const width = root.getBoundingClientRect().width;
+  root.style.left = `${Math.max(16, window.innerWidth - width - 16)}px`;
+
+  return { root, wrap, time, desc };
+}
+
+function enableGlobalDrag(root: HTMLDivElement) {
+  let dragging = false;
+  let startPointerX = 0;
+  let startPointerY = 0;
+  let startLeft = 0;
+  let startTop = 0;
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (!dragging) return;
+
+    event.preventDefault();
+
+    const deltaX = event.clientX - startPointerX;
+    const deltaY = event.clientY - startPointerY;
+    const nextLeft = clamp(
+      startLeft + deltaX,
+      0,
+      window.innerWidth - root.offsetWidth,
+    );
+    const nextTop = clamp(
+      startTop + deltaY,
+      0,
+      window.innerHeight - root.offsetHeight,
+    );
+
+    root.style.left = `${nextLeft}px`;
+    root.style.top = `${nextTop}px`;
+  };
+
+  const stopDragging = () => {
+    dragging = false;
+  };
+
+  document.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+
+    const rect = root.getBoundingClientRect();
+    dragging = true;
+    startPointerX = event.clientX;
+    startPointerY = event.clientY;
+    startLeft = rect.left;
+    startTop = rect.top;
+  });
+
+  window.addEventListener("pointermove", onPointerMove, { passive: false });
+  window.addEventListener("pointerup", stopDragging);
+  window.addEventListener("pointercancel", stopDragging);
+  window.addEventListener("blur", stopDragging);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), Math.max(min, max));
 }
 
 function render(ui: { time: HTMLDivElement }, totalMs: number) {
@@ -197,12 +255,17 @@ async function resolveSiteColors() {
   return { primary, secondary };
 }
 
-function applyColors(ui: { wrap: HTMLDivElement }, colors: { primary: string; secondary: string }) {
+function applyColors(
+  ui: { wrap: HTMLDivElement },
+  colors: { primary: string; secondary: string },
+) {
   ui.wrap.style.background = `linear-gradient(145deg, ${withAlpha(colors.secondary, 0.94)}, ${withAlpha(colors.primary, 0.9)})`;
 }
 
 function readMetaThemeColor() {
-  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  const meta = document.querySelector<HTMLMetaElement>(
+    'meta[name="theme-color"]',
+  );
   return meta?.content?.trim() || null;
 }
 
@@ -258,7 +321,11 @@ async function readFaviconColor() {
 
     if (count === 0) return null;
 
-    return rgbToHex(Math.round(r / count), Math.round(g / count), Math.round(b / count));
+    return rgbToHex(
+      Math.round(r / count),
+      Math.round(g / count),
+      Math.round(b / count),
+    );
   } catch {
     return null;
   }
@@ -266,7 +333,7 @@ async function readFaviconColor() {
 
 function getFaviconUrl() {
   const icon = document.querySelector<HTMLLinkElement>(
-    'link[rel~="icon"], link[rel="apple-touch-icon"]'
+    'link[rel~="icon"], link[rel="apple-touch-icon"]',
   );
 
   if (!icon?.href) return null;
@@ -306,6 +373,6 @@ function hexToRgb(hex: string) {
   return {
     r: (int >> 16) & 255,
     g: (int >> 8) & 255,
-    b: int & 255
+    b: int & 255,
   };
 }

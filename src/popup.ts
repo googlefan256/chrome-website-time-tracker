@@ -15,7 +15,7 @@ async function render() {
     .filter(([key]) => key.startsWith(prefix))
     .map(([key, value]) => ({
       host: key.slice(prefix.length),
-      ms: Number(value ?? 0)
+      ms: Number(value ?? 0),
     }))
     .sort((a, b) => b.ms - a.ms)
     .slice(0, 20);

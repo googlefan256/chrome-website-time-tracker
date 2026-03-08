@@ -5,14 +5,19 @@ rmSync("dist", { recursive: true, force: true });
 mkdirSync("dist", { recursive: true });
 
 await build({
-  entryPoints: ["src/content.ts"],
+  entryPoints: {
+    content: "src/content.ts",
+    background: "src/background.ts",
+    popup: "src/popup.ts"
+  },
   bundle: true,
   minify: true,
-  outfile: "dist/content.js",
+  outdir: "dist",
   target: ["chrome109"],
-  format: "iife"
+  format: "esm"
 });
 
 cpSync("src/manifest.json", "dist/manifest.json");
+cpSync("src/popup.html", "dist/popup.html");
 
 console.log("Build complete: dist/");

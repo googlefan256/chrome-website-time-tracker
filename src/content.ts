@@ -240,6 +240,15 @@ function createWidget() {
   body.append(time, desc, note);
 
   let minimized = true;
+  const keepWithinViewport = () => {
+    const rect = root.getBoundingClientRect();
+    const nextLeft = clamp(rect.left, 0, window.innerWidth - rect.width);
+    const nextTop = clamp(rect.top, 0, window.innerHeight - rect.height);
+
+    root.style.left = `${nextLeft}px`;
+    root.style.top = `${nextTop}px`;
+  };
+
   const updateMinimized = () => {
     wrap.classList.toggle("minimized", minimized);
     toggle.textContent = minimized ? "開く" : "最小化";
@@ -247,6 +256,8 @@ function createWidget() {
       "aria-label",
       minimized ? "ウィジェットを開く" : "ウィジェットを最小化",
     );
+
+    requestAnimationFrame(keepWithinViewport);
   };
   toggle.addEventListener("click", () => {
     minimized = !minimized;
@@ -262,6 +273,8 @@ function createWidget() {
 
   const width = root.getBoundingClientRect().width;
   root.style.left = `${Math.max(16, window.innerWidth - width - 16)}px`;
+
+  window.addEventListener("resize", keepWithinViewport);
 
   return { root, wrap, header, time, desc };
 }

@@ -37,79 +37,14 @@ async function render() {
       li.innerHTML = `
         <span class="rank">${index + 1}</span>
         <div class="site">
-          <img class="favicon" alt="" loading="lazy" />
           <span class="host">${row.host}</span>
         </div>
         <span class="time">${formatDuration(row.ms)}</span>
       `;
 
-      const faviconEl = li.querySelector(".favicon") as HTMLImageElement;
-      const faviconUrl = getFaviconServiceUrl(row.host);
-      faviconEl.src = faviconUrl;
-
-      const faviconColor = await readFaviconColor(faviconUrl);
-      if (faviconColor) {
-        li.style.setProperty("--site-primary", faviconColor);
-      }
-
       rankingEl.append(li);
     }),
   );
-}
-
-function getFaviconServiceUrl(host: string) {
-  const pageUrl = `https://${host}`;
-  return `chrome://favicon2/?size=64&scale_factor=2x&page_url=${encodeURIComponent(pageUrl)}`;
-}
-
-async function readFaviconColor(iconUrl: string) {
-  const img = new Image();
-  img.decoding = "async";
-
-  try {
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("favicon load failed"));
-      img.src = iconUrl;
-    });
-
-    const canvas = document.createElement("canvas");
-    canvas.width = 24;
-    canvas.height = 24;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return null;
-
-    ctx.drawImage(img, 0, 0, 24, 24);
-    const { data } = ctx.getImageData(0, 0, 24, 24);
-
-    let r = 0;
-    let g = 0;
-    let b = 0;
-    let count = 0;
-
-    for (let i = 0; i < data.length; i += 4) {
-      const alpha = data[i + 3];
-      if (alpha < 24) continue;
-
-      const brightness = data[i] + data[i + 1] + data[i + 2];
-      if (brightness < 36 || brightness > 720) continue;
-
-      r += data[i];
-      g += data[i + 1];
-      b += data[i + 2];
-      count += 1;
-    }
-
-    if (count === 0) return null;
-
-    return rgbToHex(
-      Math.round(r / count),
-      Math.round(g / count),
-      Math.round(b / count),
-    );
-  } catch {
-    return null;
-  }
 }
 
 function rankFallbackColor(index: number) {
@@ -123,12 +58,6 @@ function rankFallbackColor(index: number) {
   ];
 
   return palette[index % palette.length];
-}
-
-function rgbToHex(r: number, g: number, b: number) {
-  return `#${[r, g, b]
-    .map((v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, "0"))
-    .join("")}`;
 }
 
 function formatDuration(ms: number) {

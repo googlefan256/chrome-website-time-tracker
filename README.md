@@ -1,0 +1,31 @@
+# Chrome Website Time Tracker
+
+その日・そのサイトで使った時間を、ページ右上に小さく表示する Chrome 拡張機能です。
+
+## Features
+
+- 現在開いているサイトの「今日の利用時間」を右上に表示
+- タブの可視状態・ウィンドウフォーカス時のみ時間を加算
+- favicon / theme-color / 背景色を使って UI カラーを推定
+- TypeScript + esbuild で軽量バンドル
+- Bun で依存管理
+- Biome で format / lint
+
+## Setup
+
+```bash
+bun install
+bun run build
+```
+
+`dist/` を Chrome の「パッケージ化されていない拡張機能を読み込む」で読み込んでください。
+
+## Commands
+
+- `bun run build`: TypeScript を esbuild でバンドルして `dist/` 生成
+- `bun run check`: Biome lint + format check
+- `bun run format`: Biome format
+
+## GitHub Actions
+
+push / pull_request 時に build し、`chrome-website-time-tracker` という artifact 名でダウンロード可能な ZIP を生成します。

@@ -1,0 +1,17 @@
+{
+  "name": "chrome-website-time-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run scripts/build.ts",
+    "check": "biome check .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.2",
+    "@types/chrome": "^0.0.312"
+  }
+}

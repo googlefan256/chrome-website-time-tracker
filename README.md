@@ -1,5 +1,15 @@
 # Chrome Website Time Tracker
 
+[リポジトリ](<https://github.com/Kyo-s-s/numa-timer>)
+[ツイート](<https://x.com/Kyo_s_s/status/2030284148523610495>)
+のパクリです。
+
+ツイート時点でリポジトリがなかったので手前味噌で~~パク~~作らせていただきました。許してください何でもしますから。
+
+ソースコードのライセンスはapache-2.0です。
+
+## 以下AIの作ったREADME
+
 その日・そのサイトで使った時間を、ページ右上に小さく表示する Chrome 拡張機能です。
 
 ## Features

@@ -1,6 +1,7 @@
 const ROOT_ID = "website-time-tracker-root";
 const TICK_MS = 1_000;
 const TITLE = "Website Timer";
+const POSITION_KEY_PREFIX = "widgetPosition:";
 
 if (location.protocol.startsWith("http")) {
   void boot();
@@ -11,13 +12,17 @@ async function boot() {
     return;
   }
 
-  const ui = createWidget();
+  const domain = normalizeSiteHost(location.hostname);
+  const position = await loadWidgetPosition(domain);
+
+  const ui = createWidget(position);
   enableWidgetDrag(ui);
+  observeWidgetPosition(ui, domain);
   const colors = await resolveSiteColors();
   applyColors(ui, colors);
 
   let totalMs = 0;
-  let site = normalizeSiteHost(location.hostname);
+  let site = domain;
 
   const updateDescription = () => {
     ui.desc.textContent = `今日 ${site} で使った時間`;
@@ -114,7 +119,7 @@ async function boot() {
   });
 }
 
-function createWidget() {
+function createWidget(initialPosition: { left: number; top: number } | null) {
   const existing = document.getElementById(ROOT_ID);
   if (existing) existing.remove();
 
@@ -271,12 +276,91 @@ function createWidget() {
 
   document.documentElement.append(root);
 
-  const width = root.getBoundingClientRect().width;
-  root.style.left = `${Math.max(16, window.innerWidth - width - 16)}px`;
+  applyInitialPosition(root, initialPosition);
 
   window.addEventListener("resize", keepWithinViewport);
 
   return { root, wrap, header, time, desc };
+}
+
+function applyInitialPosition(
+  root: HTMLDivElement,
+  initialPosition: { left: number; top: number } | null,
+) {
+  if (initialPosition) {
+    const rect = root.getBoundingClientRect();
+    const nextLeft = clamp(
+      initialPosition.left,
+      0,
+      window.innerWidth - rect.width,
+    );
+    const nextTop = clamp(
+      initialPosition.top,
+      0,
+      window.innerHeight - rect.height,
+    );
+    root.style.left = `${nextLeft}px`;
+    root.style.top = `${nextTop}px`;
+    return;
+  }
+
+  const width = root.getBoundingClientRect().width;
+  root.style.left = `${Math.max(16, window.innerWidth - width - 16)}px`;
+}
+
+function observeWidgetPosition(ui: { root: HTMLDivElement }, domain: string) {
+  let saveTimer = -1;
+  const observer = new MutationObserver(() => {
+    if (saveTimer >= 0) {
+      window.clearTimeout(saveTimer);
+    }
+
+    saveTimer = window.setTimeout(() => {
+      const left = Number.parseFloat(ui.root.style.left);
+      const top = Number.parseFloat(ui.root.style.top);
+      if (Number.isNaN(left) || Number.isNaN(top)) {
+        return;
+      }
+      void saveWidgetPosition(domain, { left, top });
+    }, 80);
+  });
+
+  observer.observe(ui.root, {
+    attributes: true,
+    attributeFilter: ["style"],
+  });
+}
+
+async function loadWidgetPosition(domain: string) {
+  try {
+    const key = `${POSITION_KEY_PREFIX}${domain}`;
+    const saved = await chrome.storage.local.get(key);
+    const value = saved[key];
+    if (
+      !value ||
+      typeof value !== "object" ||
+      typeof value.left !== "number" ||
+      typeof value.top !== "number"
+    ) {
+      return null;
+    }
+
+    return { left: value.left, top: value.top };
+  } catch {
+    return null;
+  }
+}
+
+async function saveWidgetPosition(
+  domain: string,
+  position: { left: number; top: number },
+) {
+  try {
+    const key = `${POSITION_KEY_PREFIX}${domain}`;
+    await chrome.storage.local.set({ [key]: position });
+  } catch {
+    // storage access can fail on restricted pages; ignore silently
+  }
 }
 
 function enableWidgetDrag(ui: {

@@ -30,24 +30,46 @@
         list-style: none;
       }
       li {
+        --site-primary: #8ea0ff;
         display: grid;
-        grid-template-columns: 24px 1fr auto;
-        gap: 8px;
+        grid-template-columns: 28px 1fr auto;
+        gap: 10px;
         align-items: center;
-        background: #1a1f35;
-        border: 1px solid #2b3354;
-        border-radius: 10px;
+        background:
+          radial-gradient(circle at 16px 50%, color-mix(in oklab, var(--site-primary) 45%, transparent), transparent 70%),
+          #1a1f35;
+        border: 1px solid color-mix(in oklab, var(--site-primary) 35%, #2b3354);
+        border-radius: 12px;
         padding: 10px;
         margin-bottom: 8px;
       }
       .rank {
-        color: #8ea0ff;
+        color: var(--site-primary);
         font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .site {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .favicon {
+        width: 18px;
+        height: 18px;
+        border-radius: 5px;
+        background: color-mix(in oklab, var(--site-primary) 22%, #000 78%);
+        box-shadow: 0 0 0 1px color-mix(in oklab, var(--site-primary) 30%, transparent);
       }
       .host {
+        min-width: 0;
         font-size: 14px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .time {
+        color: color-mix(in oklab, var(--site-primary) 60%, #fff 40%);
         font-variant-numeric: tabular-nums;
         font-weight: 700;
       }

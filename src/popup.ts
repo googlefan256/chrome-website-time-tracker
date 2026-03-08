@@ -1,60 +1,275 @@
-const rankingEl = document.getElementById("ranking") as HTMLOListElement;
-const emptyEl = document.getElementById("empty") as HTMLDivElement;
-const dateEl = document.getElementById("date") as HTMLParagraphElement;
+type UsageEntry = {
+  dateKey: string;
+  host: string;
+  ms: number;
+};
+
+type Period = {
+  id: string;
+  title: string;
+  subtitle: string;
+  dateKeys: Set<string>;
+};
+
+type SiteSlice = {
+  host: string;
+  ms: number;
+  ratio: number;
+  color: string;
+};
+
+const periodsEl = document.getElementById("periods") as HTMLDivElement;
 
 void render();
 
 async function render() {
-  const dateKey = new Date().toLocaleDateString("sv-SE");
-  dateEl.textContent = `${dateKey} の集計`;
-
+  const now = new Date();
   const all = await chrome.storage.local.get(null);
-  const prefix = `usage:${dateKey}:`;
+  const entries = parseUsageEntries(all);
+  const periods = buildPeriods(now);
 
-  const rows = Object.entries(all)
-    .filter(([key]) => key.startsWith(prefix))
-    .map(([key, value]) => ({
-      host: key.slice(prefix.length),
-      ms: Number(value ?? 0),
-    }))
-    .sort((a, b) => b.ms - a.ms)
-    .slice(0, 20);
+  periodsEl.innerHTML = "";
 
-  rankingEl.innerHTML = "";
-
-  if (rows.length === 0) {
-    emptyEl.hidden = false;
-    return;
+  for (const period of periods) {
+    const section = renderPeriod(period, entries);
+    periodsEl.append(section);
   }
-
-  emptyEl.hidden = true;
-
-  await Promise.all(
-    rows.map(async (row, index) => {
-      const li = document.createElement("li");
-      const fallbackColor = rankFallbackColor(index);
-      li.style.setProperty("--site-primary", fallbackColor);
-      li.innerHTML = `
-        <span class="rank">${index + 1}</span>
-        <div class="site">
-          <span class="host">${row.host}</span>
-        </div>
-        <span class="time">${formatDuration(row.ms)}</span>
-      `;
-
-      rankingEl.append(li);
-    }),
-  );
 }
 
-function rankFallbackColor(index: number) {
+function parseUsageEntries(storage: Record<string, unknown>) {
+  const entries: UsageEntry[] = [];
+
+  for (const [key, value] of Object.entries(storage)) {
+    if (!key.startsWith("usage:")) {
+      continue;
+    }
+
+    const parts = key.split(":");
+    if (parts.length < 3) {
+      continue;
+    }
+
+    const dateKey = parts[1];
+    const host = parts.slice(2).join(":");
+    const ms = Number(value ?? 0);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+      continue;
+    }
+
+    if (!Number.isFinite(ms) || ms <= 0) {
+      continue;
+    }
+
+    entries.push({ dateKey, host, ms });
+  }
+
+  return entries;
+}
+
+function buildPeriods(now: Date): Period[] {
+  const todayKey = toDateKey(now);
+
+  const weekStart = new Date(now);
+  const day = weekStart.getDay();
+  const diffToMonday = day === 0 ? 6 : day - 1;
+  weekStart.setDate(weekStart.getDate() - diffToMonday);
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  return [
+    {
+      id: "daily",
+      title: "毎日の統計",
+      subtitle: `${todayKey}`,
+      dateKeys: collectDateKeys(todayKey, todayKey),
+    },
+    {
+      id: "weekly",
+      title: "毎週の統計",
+      subtitle: `${toDateKey(weekStart)} 〜 ${todayKey}`,
+      dateKeys: collectDateKeys(toDateKey(weekStart), todayKey),
+    },
+    {
+      id: "monthly",
+      title: "毎月の統計",
+      subtitle: `${toDateKey(monthStart)} 〜 ${todayKey}`,
+      dateKeys: collectDateKeys(toDateKey(monthStart), todayKey),
+    },
+  ];
+}
+
+function collectDateKeys(startKey: string, endKey: string) {
+  const keys = new Set<string>();
+  const cursor = new Date(`${startKey}T00:00:00`);
+  const end = new Date(`${endKey}T00:00:00`);
+
+  while (cursor <= end) {
+    keys.add(toDateKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return keys;
+}
+
+function renderPeriod(period: Period, entries: UsageEntry[]) {
+  const section = document.createElement("section");
+  section.className = "period";
+
+  const heading = document.createElement("h2");
+  heading.textContent = period.title;
+
+  const subtitle = document.createElement("p");
+  subtitle.className = "period-subtitle";
+  subtitle.textContent = period.subtitle;
+
+  const targetEntries = entries.filter((entry) =>
+    period.dateKeys.has(entry.dateKey),
+  );
+  const slices = summarizeSlices(targetEntries);
+
+  section.append(heading, subtitle);
+
+  if (slices.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "まだ計測データがありません。";
+    section.append(empty);
+    return section;
+  }
+
+  section.append(renderBarChart(slices), renderPieChart(slices));
+  return section;
+}
+
+function summarizeSlices(entries: UsageEntry[]) {
+  const totalsByHost = new Map<string, number>();
+
+  for (const entry of entries) {
+    totalsByHost.set(
+      entry.host,
+      (totalsByHost.get(entry.host) ?? 0) + entry.ms,
+    );
+  }
+
+  const sorted = [...totalsByHost.entries()]
+    .map(([host, ms]) => ({ host, ms }))
+    .sort((a, b) => b.ms - a.ms);
+
+  const totalMs = sorted.reduce((sum, row) => sum + row.ms, 0);
+  if (totalMs === 0) {
+    return [] as SiteSlice[];
+  }
+
+  const major: Array<{ host: string; ms: number }> = [];
+  let otherMs = 0;
+
+  for (const row of sorted) {
+    const ratio = row.ms / totalMs;
+    if (ratio >= 0.05) {
+      major.push(row);
+    } else {
+      otherMs += row.ms;
+    }
+  }
+
+  const merged = [...major];
+  if (otherMs > 0) {
+    merged.push({ host: "その他", ms: otherMs });
+  }
+
+  return merged.map((row, index) => ({
+    host: row.host,
+    ms: row.ms,
+    ratio: row.ms / totalMs,
+    color: chartColor(index),
+  }));
+}
+
+function renderBarChart(slices: SiteSlice[]) {
+  const wrap = document.createElement("div");
+  wrap.className = "chart-block";
+
+  const title = document.createElement("h3");
+  title.textContent = "棒グラフ";
+
+  const list = document.createElement("ul");
+  list.className = "bar-list";
+
+  for (const slice of slices) {
+    const item = document.createElement("li");
+    item.className = "bar-item";
+
+    const labelRow = document.createElement("div");
+    labelRow.className = "bar-label-row";
+    labelRow.innerHTML = `
+      <span class="host">${slice.host}</span>
+      <span class="meta">${Math.round(slice.ratio * 1000) / 10}% / ${formatDuration(slice.ms)}</span>
+    `;
+
+    const barTrack = document.createElement("div");
+    barTrack.className = "bar-track";
+
+    const barFill = document.createElement("div");
+    barFill.className = "bar-fill";
+    barFill.style.width = `${Math.max(slice.ratio * 100, 1)}%`;
+    barFill.style.background = slice.color;
+
+    barTrack.append(barFill);
+    item.append(labelRow, barTrack);
+    list.append(item);
+  }
+
+  wrap.append(title, list);
+  return wrap;
+}
+
+function renderPieChart(slices: SiteSlice[]) {
+  const wrap = document.createElement("div");
+  wrap.className = "chart-block";
+
+  const title = document.createElement("h3");
+  title.textContent = "円グラフ";
+
+  const graph = document.createElement("div");
+  graph.className = "pie";
+
+  let offset = 0;
+  const segments = slices.map((slice) => {
+    const start = offset;
+    offset += slice.ratio * 100;
+    return `${slice.color} ${start}% ${offset}%`;
+  });
+
+  graph.style.background = `conic-gradient(${segments.join(",")})`;
+
+  const legend = document.createElement("ul");
+  legend.className = "legend";
+
+  for (const slice of slices) {
+    const item = document.createElement("li");
+    item.innerHTML = `
+      <span class="dot" style="background:${slice.color}"></span>
+      <span class="legend-host">${slice.host}</span>
+      <span class="legend-ratio">${Math.round(slice.ratio * 1000) / 10}%</span>
+    `;
+    legend.append(item);
+  }
+
+  wrap.append(title, graph, legend);
+  return wrap;
+}
+
+function chartColor(index: number) {
   const palette = [
-    "#8ea0ff",
-    "#8ad0ff",
-    "#8fffb1",
-    "#ffd88a",
-    "#ff9fc5",
-    "#c8a2ff",
+    "#7aa2ff",
+    "#68d6ff",
+    "#7effac",
+    "#ffd36f",
+    "#ffa0d7",
+    "#bb9dff",
+    "#ff9f7a",
+    "#95ffeb",
   ];
 
   return palette[index % palette.length];
@@ -70,4 +285,8 @@ function formatDuration(ms: number) {
     .padStart(2, "0");
   const s = (totalSec % 60).toString().padStart(2, "0");
   return `${h}:${m}:${s}`;
+}
+
+function toDateKey(date: Date) {
+  return date.toLocaleDateString("sv-SE");
 }

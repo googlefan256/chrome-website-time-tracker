@@ -7,6 +7,10 @@ if (location.protocol.startsWith("http")) {
 }
 
 async function boot() {
+  if (!chrome.runtime?.id) {
+    return;
+  }
+
   const ui = createWidget();
   enableGlobalDrag(ui.root);
   const colors = await resolveSiteColors();
@@ -19,13 +23,54 @@ async function boot() {
     ui.desc.textContent = `今日 ${site} で使った時間`;
   };
 
+  let stopped = false;
+  let intervalId: number | undefined;
+
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    if (typeof intervalId === "number") {
+      window.clearInterval(intervalId);
+    }
+  };
+
+  const sendRuntimeMessage = async (message: {
+    type: "heartbeat" | "getSiteUsage";
+    host: string;
+    active?: boolean;
+    now?: number;
+  }) => {
+    if (stopped || !chrome.runtime?.id) {
+      return null;
+    }
+
+    try {
+      return await chrome.runtime.sendMessage(message);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : String(error ?? "");
+      if (
+        message.includes("Extension context invalidated") ||
+        message.includes("Receiving end does not exist")
+      ) {
+        stop();
+        return null;
+      }
+      throw error;
+    }
+  };
+
   const sync = async () => {
-    const response = await chrome.runtime.sendMessage({
+    const response = await sendRuntimeMessage({
       type: "heartbeat",
       host: location.hostname,
       active: isActive(),
       now: Date.now(),
     });
+
+    if (!response) {
+      return;
+    }
 
     totalMs = Number(response?.totalMs ?? totalMs);
     site = String(response?.site ?? site);
@@ -33,17 +78,21 @@ async function boot() {
     render(ui, totalMs);
   };
 
-  const initial = await chrome.runtime.sendMessage({
+  const initial = await sendRuntimeMessage({
     type: "getSiteUsage",
     host: location.hostname,
   });
+
+  if (!initial) {
+    return;
+  }
 
   totalMs = Number(initial?.totalMs ?? 0);
   site = String(initial?.site ?? site);
   updateDescription();
   render(ui, totalMs);
 
-  setInterval(() => {
+  intervalId = window.setInterval(() => {
     void sync();
   }, TICK_MS);
 
@@ -60,6 +109,7 @@ async function boot() {
   });
 
   window.addEventListener("beforeunload", () => {
+    stop();
     void sync();
   });
 }

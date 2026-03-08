@@ -18,7 +18,7 @@ type SiteSlice = {
   color: string;
 };
 
-const DAILY_BAR_VISIBLE_RANK = 49;
+const DAILY_BAR_VISIBLE_RANK = 10;
 
 const periodsEl = document.getElementById("periods") as HTMLDivElement;
 

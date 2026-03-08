@@ -12,7 +12,7 @@ async function boot() {
   }
 
   const ui = createWidget();
-  enableGlobalDrag(ui.root);
+  enableWidgetDrag(ui);
   const colors = await resolveSiteColors();
   applyColors(ui, colors);
 
@@ -24,12 +24,12 @@ async function boot() {
   };
 
   let stopped = false;
-  let intervalId: number | undefined;
+  let intervalId = -1;
 
   const stop = () => {
     if (stopped) return;
     stopped = true;
-    if (typeof intervalId === "number") {
+    if (intervalId >= 0) {
       window.clearInterval(intervalId);
     }
   };
@@ -141,13 +141,53 @@ function createWidget() {
       box-shadow: 0 14px 30px rgba(0,0,0,0.28);
       border: 1px solid rgba(255,255,255,0.15);
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      pointer-events: auto;
+      transition: opacity 120ms ease;
+    }
+    .wrap.dragging {
+      opacity: 0.55;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      cursor: grab;
+      user-select: none;
+    }
+    .header:active {
+      cursor: grabbing;
     }
     .name {
       font-size: 14px;
       font-weight: 700;
-      margin-bottom: 8px;
       opacity: 0.95;
       letter-spacing: 0.02em;
+    }
+    .toggle {
+      border: 1px solid rgba(255,255,255,0.35);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 11px;
+      line-height: 1.5;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .body {
+      display: block;
+    }
+    .wrap.minimized {
+      min-width: 0;
+      max-width: none;
+      padding: 10px 12px;
+    }
+    .wrap.minimized .header {
+      margin-bottom: 0;
+    }
+    .wrap.minimized .body {
+      display: none;
     }
     .time {
       font-size: 52px;
@@ -172,9 +212,16 @@ function createWidget() {
   const wrap = document.createElement("div");
   wrap.className = "wrap";
 
+  const header = document.createElement("div");
+  header.className = "header";
+
   const name = document.createElement("div");
   name.className = "name";
   name.textContent = TITLE;
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "toggle";
 
   const time = document.createElement("div");
   time.className = "time";
@@ -188,18 +235,43 @@ function createWidget() {
   note.className = "note";
   note.textContent = "この時間はもう戻りません";
 
-  wrap.append(name, time, desc, note);
+  const body = document.createElement("div");
+  body.className = "body";
+  body.append(time, desc, note);
+
+  let minimized = true;
+  const updateMinimized = () => {
+    wrap.classList.toggle("minimized", minimized);
+    toggle.textContent = minimized ? "開く" : "最小化";
+    toggle.setAttribute(
+      "aria-label",
+      minimized ? "ウィジェットを開く" : "ウィジェットを最小化",
+    );
+  };
+  toggle.addEventListener("click", () => {
+    minimized = !minimized;
+    updateMinimized();
+  });
+
+  header.append(name, toggle);
+  wrap.append(header, body);
   shadow.append(style, wrap);
+  updateMinimized();
 
   document.documentElement.append(root);
 
   const width = root.getBoundingClientRect().width;
   root.style.left = `${Math.max(16, window.innerWidth - width - 16)}px`;
 
-  return { root, wrap, time, desc };
+  return { root, wrap, header, time, desc };
 }
 
-function enableGlobalDrag(root: HTMLDivElement) {
+function enableWidgetDrag(ui: {
+  root: HTMLDivElement;
+  wrap: HTMLDivElement;
+  header: HTMLDivElement;
+}) {
+  const { root, wrap, header } = ui;
   let dragging = false;
   let startPointerX = 0;
   let startPointerY = 0;
@@ -229,14 +301,17 @@ function enableGlobalDrag(root: HTMLDivElement) {
   };
 
   const stopDragging = () => {
+    wrap.classList.remove("dragging");
     dragging = false;
   };
 
-  document.addEventListener("pointerdown", (event) => {
+  header.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
+    if ((event.target as HTMLElement).closest(".toggle")) return;
 
     const rect = root.getBoundingClientRect();
     dragging = true;
+    wrap.classList.add("dragging");
     startPointerX = event.clientX;
     startPointerY = event.clientY;
     startLeft = rect.left;

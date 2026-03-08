@@ -18,6 +18,8 @@ type SiteSlice = {
   color: string;
 };
 
+const DAILY_BAR_VISIBLE_RANK = 49;
+
 const periodsEl = document.getElementById("periods") as HTMLDivElement;
 
 void render();
@@ -126,7 +128,10 @@ function renderPeriod(period: Period, entries: UsageEntry[]) {
   const targetEntries = entries.filter((entry) =>
     period.dateKeys.has(entry.dateKey),
   );
-  const slices = summarizeSlices(targetEntries);
+  const slices =
+    period.id === "daily"
+      ? summarizeTopRanks(targetEntries, DAILY_BAR_VISIBLE_RANK)
+      : summarizeSlices(targetEntries);
 
   section.append(heading, subtitle);
 
@@ -138,8 +143,55 @@ function renderPeriod(period: Period, entries: UsageEntry[]) {
     return section;
   }
 
+  if (period.id === "daily") {
+    section.append(
+      renderBarChart(
+        slices,
+        `今日のドメイン別棒グラフ（${DAILY_BAR_VISIBLE_RANK}位まで + その他）`,
+      ),
+    );
+    return section;
+  }
+
   section.append(renderBarChart(slices), renderPieChart(slices));
   return section;
+}
+
+function summarizeTopRanks(entries: UsageEntry[], visibleRank: number) {
+  const totalsByHost = new Map<string, number>();
+
+  for (const entry of entries) {
+    totalsByHost.set(
+      entry.host,
+      (totalsByHost.get(entry.host) ?? 0) + entry.ms,
+    );
+  }
+
+  const sorted = [...totalsByHost.entries()]
+    .map(([host, ms]) => ({ host, ms }))
+    .sort((a, b) => b.ms - a.ms);
+
+  const totalMs = sorted.reduce((sum, row) => sum + row.ms, 0);
+  if (totalMs === 0) {
+    return [] as SiteSlice[];
+  }
+
+  const visible = sorted.slice(0, visibleRank);
+  const otherMs = sorted
+    .slice(visibleRank)
+    .reduce((sum, row) => sum + row.ms, 0);
+
+  const merged = [...visible];
+  if (otherMs > 0) {
+    merged.push({ host: "その他", ms: otherMs });
+  }
+
+  return merged.map((row, index) => ({
+    host: row.host,
+    ms: row.ms,
+    ratio: row.ms / totalMs,
+    color: chartColor(index),
+  }));
 }
 
 function summarizeSlices(entries: UsageEntry[]) {
@@ -186,12 +238,12 @@ function summarizeSlices(entries: UsageEntry[]) {
   }));
 }
 
-function renderBarChart(slices: SiteSlice[]) {
+function renderBarChart(slices: SiteSlice[], headingText = "棒グラフ") {
   const wrap = document.createElement("div");
   wrap.className = "chart-block";
 
   const title = document.createElement("h3");
-  title.textContent = "棒グラフ";
+  title.textContent = headingText;
 
   const list = document.createElement("ul");
   list.className = "bar-list";

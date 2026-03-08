@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>サイト利用ランキング</title>
+    <title>サイト利用統計</title>
     <style>
       body {
         margin: 0;
-        width: 360px;
-        min-height: 420px;
+        width: 380px;
+        min-height: 500px;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background: #0f1220;
         color: #f7f8fc;
@@ -17,61 +17,106 @@
         padding: 16px;
       }
       h1 {
-        margin: 0 0 8px;
+        margin: 0 0 12px;
         font-size: 18px;
       }
-      p {
-        margin: 0 0 12px;
-        color: #b6bdd6;
+      .period-buttons {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 12px;
       }
-      ol {
+      .period-buttons button {
+        border: 1px solid #2f3961;
+        border-radius: 10px;
+        background: #1a1f35;
+        color: #b6bdd6;
+        padding: 8px 6px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .period-buttons button.is-active {
+        color: #fff;
+        background: color-mix(in oklab, #8ea0ff 28%, #1a1f35);
+        border-color: #6173ce;
+      }
+      .meta {
+        margin: 0 0 6px;
+        color: #b6bdd6;
+        font-size: 13px;
+      }
+      .total {
+        margin: 0 0 14px;
+        color: #f4f7ff;
+        font-weight: 700;
+      }
+      .charts {
+        display: grid;
+        grid-template-columns: 130px 1fr;
+        gap: 14px;
+        align-items: start;
+        margin-bottom: 16px;
+      }
+      .pie {
+        width: 130px;
+        aspect-ratio: 1;
+        border-radius: 999px;
+        border: 1px solid #2c3458;
+        box-shadow: inset 0 0 0 16px #161b30;
+        background: #252f56;
+      }
+      .legend {
         margin: 0;
         padding: 0;
         list-style: none;
-      }
-      li {
-        --site-primary: #8ea0ff;
         display: grid;
-        grid-template-columns: 28px 1fr auto;
-        gap: 10px;
-        align-items: center;
-        background:
-          radial-gradient(circle at 16px 50%, color-mix(in oklab, var(--site-primary) 45%, transparent), transparent 70%),
-          #1a1f35;
-        border: 1px solid color-mix(in oklab, var(--site-primary) 35%, #2b3354);
-        border-radius: 12px;
-        padding: 10px;
-        margin-bottom: 8px;
+        gap: 6px;
       }
-      .rank {
-        color: var(--site-primary);
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-      }
-      .site {
-        min-width: 0;
+      .legend li {
         display: flex;
         align-items: center;
         gap: 8px;
+        font-size: 12px;
+        color: #c7cfea;
       }
-      .favicon {
-        width: 18px;
-        height: 18px;
-        border-radius: 5px;
-        background: color-mix(in oklab, var(--site-primary) 22%, #000 78%);
-        box-shadow: 0 0 0 1px color-mix(in oklab, var(--site-primary) 30%, transparent);
+      .legend-color {
+        width: 11px;
+        height: 11px;
+        border-radius: 3px;
+        flex-shrink: 0;
       }
-      .host {
-        min-width: 0;
-        font-size: 14px;
+      .bar-chart {
+        display: grid;
+        gap: 10px;
+      }
+      .bar-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 4px;
+        font-size: 12px;
+      }
+      .bar-host {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .time {
-        color: color-mix(in oklab, var(--site-primary) 60%, #fff 40%);
+      .bar-value {
+        color: #d9e0f7;
         font-variant-numeric: tabular-nums;
-        font-weight: 700;
+        flex-shrink: 0;
+      }
+      .bar-track {
+        width: 100%;
+        background: #232b49;
+        border-radius: 999px;
+        overflow: hidden;
+        height: 10px;
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: 999px;
       }
       .empty {
         color: #9aa4cc;
@@ -82,10 +127,18 @@
   </head>
   <body>
     <div class="wrap">
-      <h1>今日のサイト利用ランキング</h1>
-      <p id="date"></p>
-      <ol id="ranking"></ol>
+      <h1>サイト利用統計</h1>
+      <div id="period-buttons" class="period-buttons"></div>
+      <p id="period-label" class="meta"></p>
+      <p id="total-time" class="total"></p>
+
       <div id="empty" class="empty" hidden>まだ計測データがありません。</div>
+
+      <div class="charts">
+        <div id="pie-chart" class="pie"></div>
+        <ul id="legend" class="legend"></ul>
+      </div>
+      <div id="bar-chart" class="bar-chart"></div>
     </div>
     <script src="popup.js"></script>
   </body>

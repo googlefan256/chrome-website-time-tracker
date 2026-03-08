@@ -5,6 +5,14 @@
   "description": "Show today's usage time for the current site on the top-right corner.",
   "permissions": ["storage"],
   "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "サイト利用ランキング",
+    "default_popup": "popup.html"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],

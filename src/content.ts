@@ -7,42 +7,46 @@ if (location.protocol.startsWith("http")) {
 }
 
 async function boot() {
-  const dateKey = getTodayKey();
-  const hostKey = location.hostname;
-
   const ui = createWidget();
   const colors = await resolveSiteColors();
   applyColors(ui, colors);
 
-  let totalMs = await getUsage(dateKey, hostKey);
-  let lastTick = Date.now();
+  let totalMs = 0;
+  let site = normalizeSiteHost(location.hostname);
 
-  const sync = async () => {
-    await setUsage(dateKey, hostKey, totalMs);
+  const updateDescription = () => {
+    ui.desc.textContent = `今日 ${site} で使った時間`;
   };
 
-  const tick = () => {
-    const now = Date.now();
+  const sync = async () => {
+    const response = await chrome.runtime.sendMessage({
+      type: "heartbeat",
+      host: location.hostname,
+      active: isActive(),
+      now: Date.now()
+    });
 
-    if (isActive()) {
-      totalMs += now - lastTick;
-    }
-
-    lastTick = now;
+    totalMs = Number(response?.totalMs ?? totalMs);
+    site = String(response?.site ?? site);
+    updateDescription();
     render(ui, totalMs);
   };
 
-  render(ui, totalMs);
-  setInterval(tick, TICK_MS);
-
-  window.addEventListener("beforeunload", () => {
-    void sync();
+  const initial = await chrome.runtime.sendMessage({
+    type: "getSiteUsage",
+    host: location.hostname
   });
 
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) {
-      lastTick = Date.now();
-    }
+  totalMs = Number(initial?.totalMs ?? 0);
+  site = String(initial?.site ?? site);
+  updateDescription();
+  render(ui, totalMs);
+
+  setInterval(() => {
+    void sync();
+  }, TICK_MS);
+
+  window.addEventListener("focus", () => {
     void sync();
   });
 
@@ -50,9 +54,13 @@ async function boot() {
     void sync();
   });
 
-  setInterval(() => {
+  document.addEventListener("visibilitychange", () => {
     void sync();
-  }, 10_000);
+  });
+
+  window.addEventListener("beforeunload", () => {
+    void sync();
+  });
 }
 
 function createWidget() {
@@ -123,7 +131,7 @@ function createWidget() {
 
   const desc = document.createElement("div");
   desc.className = "desc";
-  desc.textContent = `今日 ${location.hostname} で使った時間`;
+  desc.textContent = "";
 
   const note = document.createElement("div");
   note.className = "note";
@@ -134,7 +142,7 @@ function createWidget() {
 
   document.documentElement.append(root);
 
-  return { wrap, time };
+  return { wrap, time, desc };
 }
 
 function render(ui: { time: HTMLDivElement }, totalMs: number) {
@@ -158,23 +166,24 @@ function isActive() {
   return document.visibilityState === "visible" && document.hasFocus();
 }
 
-function getTodayKey() {
-  return new Date().toLocaleDateString("sv-SE");
-}
+function normalizeSiteHost(host: string) {
+  const cleaned = host.toLowerCase().trim().replace(/\.$/, "");
+  if (!cleaned) {
+    return host;
+  }
 
-async function getUsage(dateKey: string, host: string) {
-  const key = storageKey(dateKey, host);
-  const data = await chrome.storage.local.get(key);
-  return Number(data[key] ?? 0);
-}
+  const labels = cleaned.split(".");
+  if (labels.length <= 2) {
+    return cleaned;
+  }
 
-async function setUsage(dateKey: string, host: string, value: number) {
-  const key = storageKey(dateKey, host);
-  await chrome.storage.local.set({ [key]: Math.floor(value) });
-}
+  const secondLevelTlds = new Set(["co.uk", "org.uk", "co.jp", "com.au"]);
+  const tail2 = labels.slice(-2).join(".");
+  if (secondLevelTlds.has(tail2) && labels.length >= 3) {
+    return labels.slice(-3).join(".");
+  }
 
-function storageKey(dateKey: string, host: string) {
-  return `usage:${dateKey}:${host}`;
+  return tail2;
 }
 
 async function resolveSiteColors() {

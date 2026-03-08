@@ -27,6 +27,7 @@ const periodLabelEl = document.getElementById(
 const totalTimeEl = document.getElementById(
   "total-time",
 ) as HTMLParagraphElement;
+const chartsEl = document.getElementById("charts") as HTMLDivElement;
 const barChartEl = document.getElementById("bar-chart") as HTMLDivElement;
 const pieChartEl = document.getElementById("pie-chart") as HTMLDivElement;
 const legendEl = document.getElementById("legend") as HTMLUListElement;
@@ -75,6 +76,7 @@ async function renderCharts() {
 
   if (slices.length === 0 || totalMs === 0) {
     emptyEl.hidden = false;
+    chartsEl.hidden = true;
     barChartEl.innerHTML = "";
     pieChartEl.style.background = "";
     legendEl.innerHTML = "";
@@ -82,6 +84,7 @@ async function renderCharts() {
   }
 
   emptyEl.hidden = true;
+  chartsEl.hidden = false;
   renderBarChart(slices, totalMs);
   renderPieChart(slices);
   renderLegend(slices);
@@ -235,7 +238,9 @@ function getPeriodRange(type: PeriodType, now: Date) {
 
   if (type === "weekly") {
     const start = new Date(today);
-    start.setDate(start.getDate() - 6);
+    const day = start.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    start.setDate(start.getDate() - diffToMonday);
     return {
       label: `${dateToKey(start)} 〜 ${dateToKey(today)} の統計`,
       startDateKey: dateToKey(start),

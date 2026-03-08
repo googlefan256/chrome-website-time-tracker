@@ -1,7 +1,13 @@
 const ROOT_ID = "website-time-tracker-root";
 const TICK_MS = 1_000;
 const TITLE = "Website Timer";
-const POSITION_KEY_PREFIX = "widgetPosition:";
+const WIDGET_STATE_KEY_PREFIX = "widgetState:";
+
+type WidgetState = {
+  left: number;
+  top: number;
+  minimized: boolean;
+};
 
 if (location.protocol.startsWith("http")) {
   void boot();
@@ -13,11 +19,45 @@ async function boot() {
   }
 
   const domain = normalizeSiteHost(location.hostname);
-  const position = await loadWidgetPosition(domain);
+  const initialState = await loadWidgetState(domain);
 
-  const ui = createWidget(position);
+  const ui = createWidget(initialState);
   enableWidgetDrag(ui);
-  observeWidgetPosition(ui, domain);
+  observeWidgetState(ui, domain);
+  const syncWidgetStateFromStorage = async () => {
+    const savedState = await loadWidgetState(domain);
+    if (!savedState) {
+      return;
+    }
+    ui.applyState(savedState);
+  };
+
+  const widgetStateStorageListener = (
+    changes: { [key: string]: chrome.storage.StorageChange },
+    areaName: string,
+  ) => {
+    if (areaName !== "local") {
+      return;
+    }
+
+    const key = getWidgetStateKey(domain);
+    const change = changes[key];
+    const nextValue = change?.newValue;
+
+    if (
+      !nextValue ||
+      typeof nextValue !== "object" ||
+      typeof nextValue.left !== "number" ||
+      typeof nextValue.top !== "number" ||
+      typeof nextValue.minimized !== "boolean"
+    ) {
+      return;
+    }
+
+    ui.applyState(nextValue);
+  };
+
+  chrome.storage.onChanged.addListener(widgetStateStorageListener);
   const colors = await resolveSiteColors();
   applyColors(ui, colors);
 
@@ -37,6 +77,7 @@ async function boot() {
     if (intervalId >= 0) {
       window.clearInterval(intervalId);
     }
+    chrome.storage.onChanged.removeListener(widgetStateStorageListener);
   };
 
   const sendRuntimeMessage = async (message: {
@@ -102,6 +143,7 @@ async function boot() {
   }, TICK_MS);
 
   window.addEventListener("focus", () => {
+    void syncWidgetStateFromStorage();
     void sync();
   });
 
@@ -110,6 +152,9 @@ async function boot() {
   });
 
   document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      void syncWidgetStateFromStorage();
+    }
     void sync();
   });
 
@@ -119,7 +164,7 @@ async function boot() {
   });
 }
 
-function createWidget(initialPosition: { left: number; top: number } | null) {
+function createWidget(initialState: WidgetState | null) {
   const existing = document.getElementById(ROOT_ID);
   if (existing) existing.remove();
 
@@ -244,7 +289,7 @@ function createWidget(initialPosition: { left: number; top: number } | null) {
   body.className = "body";
   body.append(time, desc, note);
 
-  let minimized = true;
+  let minimized = initialState?.minimized ?? true;
   const keepWithinViewport = () => {
     const rect = root.getBoundingClientRect();
     const nextLeft = clamp(rect.left, 0, window.innerWidth - rect.width);
@@ -267,7 +312,26 @@ function createWidget(initialPosition: { left: number; top: number } | null) {
   toggle.addEventListener("click", () => {
     minimized = !minimized;
     updateMinimized();
+    emitStateChange();
   });
+
+  const listeners = new Set<(state: WidgetState) => void>();
+  const readCurrentState = () => {
+    const left = Number.parseFloat(root.style.left);
+    const top = Number.parseFloat(root.style.top);
+
+    return {
+      left: Number.isNaN(left) ? 0 : left,
+      top: Number.isNaN(top) ? 0 : top,
+      minimized,
+    };
+  };
+  const emitStateChange = () => {
+    const state = readCurrentState();
+    for (const listener of listeners) {
+      listener(state);
+    }
+  };
 
   header.append(name, toggle);
   wrap.append(header, body);
@@ -276,26 +340,55 @@ function createWidget(initialPosition: { left: number; top: number } | null) {
 
   document.documentElement.append(root);
 
-  applyInitialPosition(root, initialPosition);
+  applyInitialPosition(root, initialState);
 
   window.addEventListener("resize", keepWithinViewport);
 
-  return { root, wrap, header, time, desc };
+  return {
+    root,
+    wrap,
+    header,
+    time,
+    desc,
+    applyState: (state: WidgetState) => {
+      const current = readCurrentState();
+      const hasPositionChanged =
+        Math.abs(current.left - state.left) > 0.5 ||
+        Math.abs(current.top - state.top) > 0.5;
+
+      if (hasPositionChanged) {
+        const rect = root.getBoundingClientRect();
+        const nextLeft = clamp(state.left, 0, window.innerWidth - rect.width);
+        const nextTop = clamp(state.top, 0, window.innerHeight - rect.height);
+        root.style.left = `${nextLeft}px`;
+        root.style.top = `${nextTop}px`;
+      }
+
+      if (minimized !== state.minimized) {
+        minimized = state.minimized;
+        updateMinimized();
+      }
+    },
+    getState: () => readCurrentState(),
+    onStateChange: (listener: (state: WidgetState) => void) => {
+      listeners.add(listener);
+    },
+  };
 }
 
 function applyInitialPosition(
   root: HTMLDivElement,
-  initialPosition: { left: number; top: number } | null,
+  initialState: WidgetState | null,
 ) {
-  if (initialPosition) {
+  if (initialState) {
     const rect = root.getBoundingClientRect();
     const nextLeft = clamp(
-      initialPosition.left,
+      initialState.left,
       0,
       window.innerWidth - rect.width,
     );
     const nextTop = clamp(
-      initialPosition.top,
+      initialState.top,
       0,
       window.innerHeight - rect.height,
     );
@@ -308,21 +401,43 @@ function applyInitialPosition(
   root.style.left = `${Math.max(16, window.innerWidth - width - 16)}px`;
 }
 
-function observeWidgetPosition(ui: { root: HTMLDivElement }, domain: string) {
+function observeWidgetState(
+  ui: {
+    root: HTMLDivElement;
+    getState: () => WidgetState;
+    onStateChange: (listener: (state: WidgetState) => void) => void;
+  },
+  domain: string,
+) {
   let saveTimer = -1;
-  const observer = new MutationObserver(() => {
+  let previousSerializedState = "";
+  const scheduleSave = (state: WidgetState) => {
     if (saveTimer >= 0) {
       window.clearTimeout(saveTimer);
     }
 
     saveTimer = window.setTimeout(() => {
-      const left = Number.parseFloat(ui.root.style.left);
-      const top = Number.parseFloat(ui.root.style.top);
-      if (Number.isNaN(left) || Number.isNaN(top)) {
+      const serializedState = JSON.stringify(state);
+      if (serializedState === previousSerializedState) {
         return;
       }
-      void saveWidgetPosition(domain, { left, top });
+      previousSerializedState = serializedState;
+      void saveWidgetState(domain, state);
     }, 80);
+  };
+
+  ui.onStateChange((state) => {
+    scheduleSave(state);
+  });
+
+  const observer = new MutationObserver(() => {
+    const left = Number.parseFloat(ui.root.style.left);
+    const top = Number.parseFloat(ui.root.style.top);
+    if (Number.isNaN(left) || Number.isNaN(top)) {
+      return;
+    }
+
+    scheduleSave({ ...ui.getState(), left, top });
   });
 
   observer.observe(ui.root, {
@@ -331,9 +446,9 @@ function observeWidgetPosition(ui: { root: HTMLDivElement }, domain: string) {
   });
 }
 
-async function loadWidgetPosition(domain: string) {
+async function loadWidgetState(domain: string) {
   try {
-    const key = `${POSITION_KEY_PREFIX}${domain}`;
+    const key = getWidgetStateKey(domain);
     const saved = await chrome.storage.local.get(key);
     const value = saved[key];
     if (
@@ -345,22 +460,27 @@ async function loadWidgetPosition(domain: string) {
       return null;
     }
 
-    return { left: value.left, top: value.top };
+    return {
+      left: value.left,
+      top: value.top,
+      minimized: Boolean(value.minimized),
+    };
   } catch {
     return null;
   }
 }
 
-async function saveWidgetPosition(
-  domain: string,
-  position: { left: number; top: number },
-) {
+async function saveWidgetState(domain: string, state: WidgetState) {
   try {
-    const key = `${POSITION_KEY_PREFIX}${domain}`;
-    await chrome.storage.local.set({ [key]: position });
+    const key = getWidgetStateKey(domain);
+    await chrome.storage.local.set({ [key]: state });
   } catch {
     // storage access can fail on restricted pages; ignore silently
   }
+}
+
+function getWidgetStateKey(domain: string) {
+  return `${WIDGET_STATE_KEY_PREFIX}${domain}`;
 }
 
 function enableWidgetDrag(ui: {
